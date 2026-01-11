@@ -1,0 +1,47 @@
+# DINOv3 Phase B: Domain Adaptation Config (ViT-Small)
+# Based on: dinov3_vits16_domain_adapt.yaml
+
+train:
+  dataset_path: ImageFolder:root=./data/images:split=TRAIN  # 默认路径，可被命令行覆盖
+  centering: "sinkhorn_knopp"
+  batch_size_per_gpu: 32  # 论文设定: 32
+  output_dir: "./runs/ssl_vits16"  # 默认输出目录
+  save_every_k_epochs: 10
+  OFFICIAL_EPOCH_LENGTH: 1250 # 1 epoch length in iterations
+
+student:
+  arch: "vits16"
+  patch_size: 16
+  drop_path_rate: 0.1
+  layerscale: 1.0e-5
+  drop_path_uniform: true
+  pretrained_weights: "" # 留空，通过命令行指定官方权重路径
+
+teacher:
+  momentum_teacher: 0.996 # 论文设定
+  final_momentum_teacher: 1.0
+  warmup_teacher_temp: 0.04
+  teacher_temp: 0.07
+  warmup_teacher_temp_epochs: 30
+
+optim:
+  epochs: 100 # 相当于 100 * 1250 = 125,000 iters (论文说40k，这里稍微多一点保证收敛，可早停)
+  weight_decay: 0.04
+  lr: 2.0e-4 # 论文设定
+  warmup_epochs: 10
+  min_lr: 1.0e-6
+  clip_grad: 3.0
+  freeze_last_layer_epochs: 1
+  scaling_rule: sqrt_wrt_1024
+
+crops:
+  local_crops_number: 8
+  local_crops_scale: [0.05, 0.4]
+  global_crops_scale: [0.4, 1.0]
+  local_crops_size: 96
+  global_crops_size: 224
+
+ibot:
+  loss_weight: 1.0
+  mask_sample_probability: 0.5
+  separate_head: true

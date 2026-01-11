@@ -1,0 +1,47 @@
+# DINOv3 Phase B: Domain Adaptation Config (ViT-Small Plus)
+# S+ 模型比 S 模型略大，使用了更多数据预训练
+
+train:
+  dataset_path: ImageFolder:root=./data/images:split=TRAIN
+  centering: "sinkhorn_knopp"
+  batch_size_per_gpu: 32
+  output_dir: "./runs/ssl_vits16plus"
+  save_every_k_epochs: 10
+  OFFICIAL_EPOCH_LENGTH: 1250
+
+student:
+  arch: "vits16" # 注意：架构名可能依然是 vits16，区别在于加载的权重
+  patch_size: 16
+  drop_path_rate: 0.1
+  layerscale: 1.0e-5
+  drop_path_uniform: true
+  pretrained_weights: ""
+
+teacher:
+  momentum_teacher: 0.996
+  final_momentum_teacher: 1.0
+  warmup_teacher_temp: 0.04
+  teacher_temp: 0.07
+  warmup_teacher_temp_epochs: 30
+
+optim:
+  epochs: 100
+  weight_decay: 0.04
+  lr: 2.0e-4
+  warmup_epochs: 10
+  min_lr: 1.0e-6
+  clip_grad: 3.0
+  freeze_last_layer_epochs: 1
+  scaling_rule: sqrt_wrt_1024
+
+crops:
+  local_crops_number: 8
+  local_crops_scale: [0.05, 0.4]
+  global_crops_scale: [0.4, 1.0]
+  local_crops_size: 96
+  global_crops_size: 224
+
+ibot:
+  loss_weight: 1.0
+  mask_sample_probability: 0.5
+  separate_head: true

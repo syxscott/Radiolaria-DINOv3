@@ -1,0 +1,13 @@
+torch>=2.0.0
+torchvision>=0.15.0
+numpy
+pandas
+scikit-learn
+matplotlib
+seaborn
+pyyaml
+omegaconf
+termcolor
+tqdm
+scipy
+submitit
