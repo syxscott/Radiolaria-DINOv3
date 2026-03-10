@@ -169,6 +169,38 @@ rsync -avz -e "ssh -p 端口号" ./data 用户名@服务器 IP:/path/to/Radiolar
 **方法 C：MobaXterm 拖拽**
 - 连接服务器后，直接拖拽本地文件夹到右侧文件浏览器
 
+### 🔄 本地数据整理（Windows 用户）
+
+如果你的数据在 Windows 上，先在本地整理好再上传：
+
+```bash
+# 在 Windows PowerShell 中运行
+# 整理 D:\数据集\dataR 到当前目录的 data/ 文件夹
+
+python scripts/organize_dataset.py \
+  --data-root "D:\数据集\dataR" \
+  --output-dir "./data"
+
+# 使用符号链接（节省空间，不推荐 Windows）
+python scripts/organize_dataset.py \
+  --data-root "D:\数据集\dataR" \
+  --output-dir "./data" \
+  --symlink
+```
+
+整理完成后，会生成：
+```
+data/
+├── images/train/0/       # 所有训练图像（自监督用）
+├── splits_fixed/         # 标准化后的 CSV
+│   ├── train_fixed.csv
+│   ├── val_fixed.csv
+│   └── test_fixed.csv
+└── class_mapping.csv     # 类别映射
+```
+
+然后上传整理好的 data/ 目录到服务器。
+
 ---
 
 <a name="step4"></a>
