@@ -182,6 +182,39 @@ class RadiolariaDataset(Dataset):
 
     def __getitem__(self, idx):
         path, label = self.samples[idx]
+        # 如果路径不存在，尝试在 img_root 下查找
+        if not os.path.exists(path):
+            # 尝试构建相对于 img_root 的路径
+            filename = os.path.basename(path)
+            # 检查是否在 train/0 目录下
+            alt_path = os.path.join(self.img_root, 'train', '0', filename)
+            if os.path.exists(alt_path):
+                path = alt_path
+            else:
+                # 如果还是找不到，尝试在原始路径的父目录中查找
+                parent_dir = os.path.dirname(self.img_root)
+                alt_path2 = os.path.join(parent_dir, filename)
+                if os.path.exists(alt_path2):
+                    path = alt_path2
+                else:
+                    # 最后尝试直接在 img_root 中查找
+                    alt_path3 = os.path.join(self.img_root, filename)
+                    if os.path.exists(alt_path3):
+                        path = alt_path3
+                    else:
+                        # 如果所有尝试都失败，记录错误
+                        print(f"❌ [错误] {self.name} 找不到图片: {path} 或替代路径 {alt_path}, {alt_path2}, {alt_path3}")
+                        self.error_count += 1
+                        if self.error_count == self.max_errors:
+                            raise RuntimeError(
+                                f"{self.name} 数据集加载失败次数过多 (> {self.max_errors})，请检查数据路径或文件损坏情况！")
+                        
+                        # 返回一张全黑图作为 fallback
+                        img = Image.new('RGB', (224, 224), (0, 0, 0))
+                        if self.transform:
+                            img = self.transform(img)
+                        return img, label, path
+
         try:
             with open(path, 'rb') as f:
                 img = Image.open(f).convert('RGB')

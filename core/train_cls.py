@@ -107,6 +107,25 @@ def load_weights_robust(model, weights_path):
     else:
         state_dict = checkpoint
 
+    # 检查权重文件的维度是否匹配模型
+    expected_dim = model.embed_dim
+    actual_dim = None
+    
+    # 检查 cls_token 的维度
+    if 'cls_token' in state_dict:
+        actual_dim = state_dict['cls_token'].shape[-1]
+    elif 'mask_token' in state_dict:
+        # 如果没有 cls_token，尝试从 mask_token 推断维度
+        actual_dim = state_dict['mask_token'].shape[-1]
+    elif 'patch_embed.proj.weight' in state_dict:
+        # 从 patch_embed 推断维度
+        actual_dim = state_dict['patch_embed.proj.weight'].shape[0]
+    
+    if actual_dim and actual_dim != expected_dim:
+        print(f"⚠️ 权重维度不匹配: 权重文件 {actual_dim}D vs 模型 {expected_dim}D")
+        print(f"   请确保权重文件与模型大小一致")
+        raise ValueError(f"模型大小不匹配: 期望 {expected_dim}D，得到 {actual_dim}D")
+
     new_state_dict = {}
     for k, v in state_dict.items():
         k = k.replace("module.", "").replace("backbone.", "")

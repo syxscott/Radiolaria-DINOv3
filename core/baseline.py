@@ -48,6 +48,33 @@ def load_backbone(model_size, weights_path, device):
 
         # 清理 key
         state_dict = {k.replace("module.", "").replace("backbone.", ""): v for k, v in state_dict.items()}
+        
+        # 检查权重文件的维度是否匹配模型
+        expected_dim = model.embed_dim
+        actual_dim = None
+        
+        # 检查 cls_token 的维度
+        if 'cls_token' in state_dict:
+            actual_dim = state_dict['cls_token'].shape[-1]
+        elif 'mask_token' in state_dict:
+            # 如果没有 cls_token，尝试从 mask_token 推断维度
+            actual_dim = state_dict['mask_token'].shape[-1]
+        elif 'patch_embed.proj.weight' in state_dict:
+            # 从 patch_embed 推断维度
+            actual_dim = state_dict['patch_embed.proj.weight'].shape[0]
+        
+        if actual_dim and actual_dim != expected_dim:
+            print(f"⚠️ 权重维度不匹配: 权重文件 {actual_dim}D vs 模型 {expected_dim}D")
+            print(f"   请确保权重文件与模型大小一致: {model_size}")
+            print(f"   模型期望: {model_size} = {expected_dim}D")
+            if model_size == 'vitb16' and actual_dim == 384:
+                print(f"   提示: 你可能使用了 ViT-Small 权重 ({actual_dim}D) 但指定了 ViT-Base ({expected_dim}D)")
+                print(f"   请使用 --model_size vits16 或下载正确的 ViT-Base 权重")
+            elif model_size == 'vits16' and actual_dim == 768:
+                print(f"   提示: 你可能使用了 ViT-Base 权重 ({actual_dim}D) 但指定了 ViT-Small ({expected_dim}D)")
+                print(f"   请使用 --model_size vitb16 或下载正确的 ViT-Small 权重")
+            raise ValueError(f"模型大小不匹配: 期望 {expected_dim}D，得到 {actual_dim}D")
+        
         msg = model.load_state_dict(state_dict, strict=False)
         print(f"权重加载状态: {msg}")
     else:

@@ -109,6 +109,19 @@ def organize_dataset(data_root, output_dir='./data', symlink=False):
                         shutil.copy2(src, dst)
                 else:
                     shutil.copy2(src, dst)
+            else:
+                # 如果原始路径不存在，尝试直接在 images_dir 中查找文件名
+                src_by_name = images_dir / dst_filename
+                if src_by_name.exists():
+                    if symlink:
+                        try:
+                            os.symlink(str(src_by_name.resolve()), str(dst))
+                        except:
+                            shutil.copy2(src_by_name, dst)
+                    else:
+                        shutil.copy2(src_by_name, dst)
+                else:
+                    print(f"  ⚠️  找不到图像: {src} 或 {src_by_name}")
         
         print(f'  ✓ {split} 集: {len(df)} 张图像')
     
@@ -131,6 +144,19 @@ def organize_dataset(data_root, output_dir='./data', symlink=False):
                         shutil.copy2(src, dst)
                 else:
                     shutil.copy2(src, dst)
+            else:
+                # 如果原始路径不存在，尝试直接在 images_dir 中查找文件名
+                src_by_name = images_dir / dst_filename
+                if src_by_name.exists():
+                    if symlink:
+                        try:
+                            os.symlink(str(src_by_name.resolve()), str(dst))
+                        except:
+                            shutil.copy2(src_by_name, dst)
+                    else:
+                        shutil.copy2(src_by_name, dst)
+                else:
+                    print(f"  ⚠️  找不到图像: {src} 或 {src_by_name}")
 
             if (idx + 1) % 100 == 0:
                 print(f'  自监督训练集进度: {idx + 1}/{len(train_df)}')
