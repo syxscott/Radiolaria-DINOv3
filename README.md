@@ -11,6 +11,8 @@
 
 [🇬🇧 English](#english) | [🇨🇳 中文](#chinese) | [🇯🇵 日本語](#japanese)
 
+[📖 SSH Training Guide](SSH_TRAINING_GUIDE.md) | [🐛 Report Issue](https://github.com/syxscott/Radiolaria-DINOv3/issues)
+
 </div>
 
 ---
