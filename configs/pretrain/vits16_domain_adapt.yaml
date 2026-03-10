@@ -25,10 +25,10 @@ teacher:
   warmup_teacher_temp_epochs: 30
 
 optim:
-  epochs: 100 # 相当于 100 * 1250 = 125,000 iters (论文说40k，这里稍微多一点保证收敛，可早停)
+  epochs: 32
   weight_decay: 0.04
-  lr: 2.0e-4 # 论文设定
-  warmup_epochs: 10
+  lr: 2.0e-4
+  warmup_epochs: 0.8
   min_lr: 1.0e-6
   clip_grad: 3.0
   freeze_last_layer_epochs: 1

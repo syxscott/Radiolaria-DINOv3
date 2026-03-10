@@ -24,10 +24,10 @@ teacher:
   warmup_teacher_temp_epochs: 30
 
 optim:
-  epochs: 100
+  epochs: 32
   weight_decay: 0.04
   lr: 2.0e-4
-  warmup_epochs: 10
+  warmup_epochs: 0.8
   min_lr: 1.0e-6
   clip_grad: 3.0
   freeze_last_layer_epochs: 1
