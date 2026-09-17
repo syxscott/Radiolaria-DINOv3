@@ -1,9 +1,0 @@
-﻿model,proto,knn,ptmap
-vits16-official,63.93,75.07,64.27
-splus-official,63.7,74.6,64.97
-vitb16-official,63.62,73.15,64.71
-vitl16-official,60.31,71.56,60.68
-vitb16-tapt-gram,50.05,69.38,53.91
-vitb16-tapt-nogram,51.77,68.47,56.04
-splus-tapt-nogram,48.44,68.38,52.2
-splus-tapt-gram,47.5,67.59,51.02

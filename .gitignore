@@ -32,3 +32,12 @@ __pycache__/
 .DS_Store
 *.tmp
 .zcode/
+
+# ===== 文档与实验数据 (仅本地保留, 不上传) =====
+实验原始数据/
+实验报告_*.md
+主实验运行清单.md
+论文实验清单.md
+测试总结报告.md
+项目检查报告.md
+data/domain_split.csv
