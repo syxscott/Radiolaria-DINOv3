@@ -28,11 +28,32 @@ def create_splits(csv_path, output_dir):
         
         if prop == 0.0:
             # Empty training set for baseline
-            pd.DataFrame(columns=['filepath', 'label']).to_csv(prop_dir / 'train.csv', index=False)
-            val_df, test_df = train_test_split(df, test_size=0.15, stratify=df['label'])
+            train_df = pd.DataFrame(columns=['filepath', 'label'])
+            try:
+                val_df, test_df = train_test_split(df, test_size=0.15, stratify=df['label'], random_state=42)
+            except ValueError:
+                val_df, test_df = train_test_split(df, test_size=0.15, random_state=42)
+        elif prop >= 1.0:
+            # sklearn>=1.4 不允许 train_size=1.0
+            # 100% 场景：全部样本进入 train，val/test 置空（仅用于比例实验）
+            train_df = df.copy()
+            val_df = pd.DataFrame(columns=['filepath', 'label'])
+            test_df = pd.DataFrame(columns=['filepath', 'label'])
         else:
-            train_df, temp_df = train_test_split(df, train_size=prop, stratify=df['label'])
-            val_df, test_df = train_test_split(temp_df, test_size=0.5, stratify=temp_df['label'])
+            try:
+                train_df, temp_df = train_test_split(df, train_size=prop, stratify=df['label'], random_state=42)
+            except ValueError:
+                train_df, temp_df = train_test_split(df, train_size=prop, random_state=42)
+
+            if len(temp_df) > 1:
+                try:
+                    val_df, test_df = train_test_split(temp_df, test_size=0.5, stratify=temp_df['label'], random_state=42)
+                except ValueError:
+                    val_df, test_df = train_test_split(temp_df, test_size=0.5, random_state=42)
+            else:
+                # 仅剩 1 个样本时全归 val：val/test 各放一份会造成两集泄漏
+                val_df = temp_df.copy()
+                test_df = pd.DataFrame(columns=['filepath', 'label'])
         
         train_df.to_csv(prop_dir / 'train.csv', index=False)
         val_df.to_csv(prop_dir / 'val.csv', index=False)

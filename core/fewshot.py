@@ -85,8 +85,12 @@ def setup_distributed():
         rank = int(os.environ["RANK"])
         world_size = int(os.environ["WORLD_SIZE"])
         gpu = int(os.environ["LOCAL_RANK"])
-        torch.cuda.set_device(gpu)
-        dist.init_process_group(backend="nccl", init_method="env://", world_size=world_size, rank=rank)
+        if torch.cuda.is_available():
+            torch.cuda.set_device(gpu)
+            backend = "nccl"
+        else:
+            backend = "gloo"
+        dist.init_process_group(backend=backend, init_method="env://", world_size=world_size, rank=rank)
         dist.barrier()
         return gpu, rank, world_size
     else:
@@ -103,8 +107,9 @@ def set_seed(seed):
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.deterministic = False
+    torch.backends.cudnn.benchmark = True
+    torch.set_float32_matmul_precision("high")
 
 
 def unwrap_model(model):
@@ -229,10 +234,29 @@ class MiniImageNetDataset(Dataset):
     def __len__(self):
         return len(self.img_names)
 
+    def _resolve_path(self, path):
+        if os.path.isabs(path) and os.path.exists(path):
+            return path
+
+        p = os.path.join(self.img_root, path)
+        if os.path.exists(p):
+            return p
+
+        filename = os.path.basename(path)
+        candidates = [
+            os.path.join(self.img_root, 'train', '0', filename),
+            os.path.join(self.img_root, filename),
+            os.path.join(os.path.dirname(self.img_root), filename),
+        ]
+        for cp in candidates:
+            if os.path.exists(cp):
+                return cp
+
+        return p
+
     def __getitem__(self, idx):
         path = str(self.img_names[idx])
-        if not os.path.isabs(path):
-            path = os.path.join(self.img_root, path)
+        path = self._resolve_path(path)
 
         try:
             img = Image.open(path).convert('RGB')
@@ -398,7 +422,7 @@ def extract_features_distributed(model, loader, device, use_tta=False):
         for imgs, lbls in iterator:
             imgs = imgs.to(device, non_blocking=True)
             lbls = lbls.to(device, non_blocking=True)
-            with torch.cuda.amp.autocast():
+            with torch.cuda.amp.autocast(enabled=torch.cuda.is_available()):
                 feats = apply_tta(extract_fn, imgs, use_tta)
             local_feats.append(feats.float())
             local_labels.append(lbls)
@@ -412,7 +436,8 @@ def extract_features_distributed(model, loader, device, use_tta=False):
 
 def evaluate_knn_distributed(model, test_loader, device, n_way=5, n_shot=1, episodes=600, use_tta=False):
     all_feats, all_labels = extract_features_distributed(model, test_loader, device, use_tta)
-    dist.barrier()
+    if dist.is_initialized():
+        dist.barrier()
     all_feats = all_feats.to(device)
     all_labels = all_labels.to(device)
 
@@ -492,7 +517,11 @@ def main():
     gpu, rank, world_size = setup_distributed()
     logger = setup_logger(args.output_dir, rank)
     set_seed(args.seed)
-    device = torch.device(gpu)
+    is_distributed = dist.is_initialized()
+    if torch.cuda.is_available():
+        device = torch.device(f"cuda:{gpu}" if is_distributed else "cuda")
+    else:
+        device = torch.device("cpu")
 
     if rank == 0: logger.info(f"Args: {args}")
 
@@ -514,14 +543,21 @@ def main():
         ])
 
     test_set = MiniImageNetDataset(test_csv, img_root, test_tf)
-    test_sampler = DistributedSampler(test_set, shuffle=False)
-    test_loader = DataLoader(test_set, batch_size=args.batch_size, sampler=test_sampler, num_workers=args.num_workers,
-                             pin_memory=True)
+    test_sampler = DistributedSampler(test_set, shuffle=False) if is_distributed else None
+    test_loader = DataLoader(
+        test_set,
+        batch_size=args.batch_size,
+        sampler=test_sampler,
+        shuffle=False,
+        num_workers=args.num_workers,
+        pin_memory=torch.cuda.is_available(),
+    )
 
     if args.run_knn:
         if rank == 0: logging.info("=== Phase: KNN Evaluation ===")
         backbone = DINOv3Wrapper(args.model_size, args.weights, args.feature_mode).to(device)
-        backbone = DDP(backbone, device_ids=[gpu])
+        if is_distributed:
+            backbone = DDP(backbone, device_ids=[gpu] if torch.cuda.is_available() else None)
 
         acc1, c1 = evaluate_knn_distributed(backbone, test_loader, device, n_way=args.n_way, n_shot=1,
                                             episodes=args.episodes, use_tta=args.use_tta)

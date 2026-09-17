@@ -10,7 +10,12 @@ train:
   OFFICIAL_EPOCH_LENGTH: 1250 # 1 epoch length in iterations
 
 student:
-  arch: "vits16"
+  # dinov3 模型注册表名为 vit_small（vits16 会直接 KeyError，与 100% TAPT 实测一致）
+  arch: "vit_small"
+  # 以下三项使架构与官方 checkpoint 完全一致(此前缺失导致官方 storage tokens/bias_mask 被静默丢弃)
+  norm_layer: "layernormbf16"
+  n_storage_tokens: 4
+  mask_k_bias: true
   patch_size: 16
   drop_path_rate: 0.1
   layerscale: 1.0e-5

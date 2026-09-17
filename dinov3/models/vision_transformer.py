@@ -341,6 +341,26 @@ def vit_small(patch_size=16, **kwargs):
     return model
 
 
+def vit_small_plus(patch_size=16, **kwargs):
+    # Official DINOv3 ViT-S+/16 (vitsplus): 与 dinov3.hub.backbones.dinov3_vits16plus 完全一致，
+    # 用于加载 dinov3_vits16plus_pretrain.pth 与 TAPT 续训。
+    # 训练时 build_model 会从 cfg.student 传入同名键，setdefault 仅作独立构建时的兜底。
+    kwargs.setdefault("layerscale_init", 1.0e-05)
+    kwargs.setdefault("ffn_layer", "swiglu")
+    kwargs.setdefault("norm_layer", "layernormbf16")
+    kwargs.setdefault("n_storage_tokens", 4)
+    kwargs.setdefault("mask_k_bias", True)
+    model = DinoVisionTransformer(
+        patch_size=patch_size,
+        embed_dim=384,
+        depth=12,
+        num_heads=6,
+        ffn_ratio=6,
+        **kwargs,
+    )
+    return model
+
+
 def vit_base(patch_size=16, **kwargs):
     model = DinoVisionTransformer(
         patch_size=patch_size,

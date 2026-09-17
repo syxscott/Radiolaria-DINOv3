@@ -1,0 +1,48 @@
+# Few-shot core experiment config — 无 Gram TAPT 对照版
+# 只跑 fraction=100 的 TAPT 行(Baseline 行复用 results/few_shot_classifier 已有结果)
+experiment_name: few_shot_classifier_nogram
+
+data_root: ./data
+results_root: ./results
+
+fractions: ["100"]
+model_sizes: ["small", "smallplus", "base"]
+k_shots: [1, 3, 5, 10]
+seeds: [42, 123, 456, 789, 999]
+
+img_size: 224
+num_workers: 4
+batch_size: 64
+eval_batch_size: 128
+progress_tqdm: true
+
+# Progressive SFT
+epochs_linear: 10
+epochs_full_ft: 20
+lr_linear: 5.0e-4
+lr_full_ft: 2.0e-5
+weight_decay: 0.05
+layer_decay: 0.75
+use_llrd: true
+
+# Mixup + CutMix
+mixup_alpha: 0.8
+cutmix_alpha: 1.0
+mix_prob: 1.0
+randaugment_magnitude: 2
+
+# Frozen feature LP
+lp_c: 1.0
+lp_max_iter: 2000
+
+# "100" 指向无 Gram TAPT 的 teacher 权重
+checkpoints:
+  small:
+    "0": ./model/dinov3_vits16_pretrain.pth
+    "100": ./outputs/tapt_vits16_100_nogram/teacher_checkpoint.pth
+  smallplus:
+    "0": ./model/dinov3_vits16plus_pretrain.pth
+    "100": ./outputs/tapt_vits16plus_100_nogram/teacher_checkpoint.pth
+  base:
+    "0": ./model/dinov3_vitb16_pretrain.pth
+    "100": ./outputs/tapt_vitb16_100_nogram/teacher_checkpoint.pth

@@ -1,0 +1,37 @@
+# 域驱动增强消融: 180° 旋转增强 + Baseline 官方权重 FT (5/10-shot)
+experiment_name: few_shot_rot
+
+data_root: ./data
+results_root: ./results
+
+fractions: ["0"]
+model_sizes: ["small"]
+k_shots: [5, 10]
+seeds: [42, 123, 456, 789, 999]
+
+img_size: 224
+num_workers: 4
+batch_size: 64
+eval_batch_size: 128
+progress_tqdm: true
+
+epochs_linear: 10
+epochs_full_ft: 20
+lr_linear: 5.0e-4
+lr_full_ft: 2.0e-5
+weight_decay: 0.05
+layer_decay: 0.75
+use_llrd: true
+
+mixup_alpha: 0.8
+cutmix_alpha: 1.0
+mix_prob: 1.0
+randaugment_magnitude: 2
+rotation_deg: 180   # 域动机: 标本任意取向投影
+
+lp_c: 1.0
+lp_max_iter: 2000
+
+checkpoints:
+  small:
+    "0": ./model/dinov3_vits16_pretrain.pth

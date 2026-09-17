@@ -10,7 +10,14 @@ train:
   OFFICIAL_EPOCH_LENGTH: 1250
 
 student:
-  arch: "vits16" # 注意：架构名可能依然是 vits16，区别在于加载的权重
+  # ViT-S+/16 官方架构(vitsplus: swiglu FFN + 4 storage tokens)，
+  # 已在 dinov3/models/vision_transformer.py 注册为 vit_small_plus
+  arch: "vit_small_plus"
+  # 以下各项使架构与官方 checkpoint 完全一致(此前缺失导致官方 storage tokens/bias_mask 被静默丢弃)
+  ffn_layer: "swiglu"
+  norm_layer: "layernormbf16"
+  n_storage_tokens: 4
+  mask_k_bias: true
   patch_size: 16
   drop_path_rate: 0.1
   layerscale: 1.0e-5
@@ -25,10 +32,13 @@ teacher:
   warmup_teacher_temp_epochs: 30
 
 optim:
-  epochs: 100
+  # 与已完成的 100% TAPT 实验一致：32 epochs × OFFICIAL_EPOCH_LENGTH=1250 = 40000 步
+  # 如需更长训练请明确调大（epochs: 100 约需 8.5 小时/次）
+  epochs: 32
   weight_decay: 0.04
   lr: 2.0e-4
-  warmup_epochs: 10
+  # 与已完成的 100% TAPT 运行一致(0.8)；原值 10 会让 warmup 占 1 万步
+  warmup_epochs: 0.8
   min_lr: 1.0e-6
   clip_grad: 3.0
   freeze_last_layer_epochs: 1

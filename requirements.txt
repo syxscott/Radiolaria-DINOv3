@@ -4,6 +4,7 @@
 # Install with: pip install -r requirements.txt
 #
 # For detailed installation instructions, see README.md
+# Tested on Python 3.10.19 (recommended) and Python 3.13.5
 
 # Core deep learning framework
 torch>=2.0.0
@@ -34,3 +35,17 @@ submitit>=1.4.0
 
 # Additional utilities
 Pillow>=8.0.0  # Image processing
+
+# Installation notes:
+# -------------------
+# For GPU training (recommended):
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
+#
+# For CPU-only (development/testing):
+#   pip install torch torchvision
+#
+# Then install remaining dependencies:
+#   pip install -r requirements.txt
+#
+# Verify installation:
+#   python test_all_modules.py

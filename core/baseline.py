@@ -91,7 +91,9 @@ def extract_features(model, loader, device):
     labels = []
     for img, label, _ in tqdm(loader, desc="特征提取中"):
         img = img.to(device)
-        out = model(img)
+        with torch.autocast(device_type="cuda", dtype=torch.bfloat16, enabled=device.type == "cuda"):
+            out = model(img)
+        out = out.float()
         features.append(out.cpu().numpy())
         labels.append(label.numpy() if isinstance(label, torch.Tensor) else label)
     if len(features) == 0:
@@ -101,6 +103,20 @@ def extract_features(model, loader, device):
     # L2 Normalize
     features = features / (np.linalg.norm(features, axis=1, keepdims=True) + 1e-6)
     return features, labels
+
+
+def sanitize_features(features, name="features"):
+    """Replace NaN/Inf to avoid downstream sklearn crashes."""
+    if features.size == 0:
+        return features
+    bad = ~np.isfinite(features)
+    bad_count = int(bad.sum())
+    if bad_count > 0:
+        print(f"⚠️ [{name}] 检测到 NaN/Inf: {bad_count}，将执行 nan_to_num 修复")
+        features = np.nan_to_num(features, nan=0.0, posinf=1.0, neginf=-1.0)
+        # 重新归一化，保持与原流程一致
+        features = features / (np.linalg.norm(features, axis=1, keepdims=True) + 1e-6)
+    return features
 
 
 def evaluate_prototypes(train_feats, train_labels, test_feats, test_labels, idx_to_class):
@@ -147,7 +163,7 @@ def main():
     parser.add_argument('--data_root', required=True, help='数据集根目录 (包含CSV)')
     parser.add_argument('--img_root', default=None, help='图片目录 (默认在 data_root/images)')
     parser.add_argument('--weights', required=True, help='预训练权重路径')
-    parser.add_argument('--model_size', default='vitl16', choices=['vits16', 'vitb16', 'vitl16'])
+    parser.add_argument('--model_size', default='vitl16', choices=['vits16', 'vitb16', 'vitl16', 'vitg14'])
     parser.add_argument('--img_size', type=int, default=224, help='输入图像尺寸')
     parser.add_argument('--batch_size', type=int, default=128)
     parser.add_argument('--output_dir', default='runs/baseline_evaluation', help='结果输出目录')
@@ -181,6 +197,9 @@ def main():
     test_feats, test_labels = extract_features(model, DataLoader(test_ds, batch_size=args.batch_size, num_workers=4),
                                                device)
 
+    train_feats = sanitize_features(train_feats, "train_feats")
+    test_feats = sanitize_features(test_feats, "test_feats")
+
     np.save(os.path.join(args.output_dir, 'train_feats.npy'), train_feats)
     np.save(os.path.join(args.output_dir, 'test_feats.npy'), test_feats)
 
@@ -190,7 +209,7 @@ def main():
     evaluate_knn(train_feats, train_labels, test_feats, test_labels, k=5)
 
     print("正在运行线性分类器 (sklearn)...")
-    clf = LogisticRegression(random_state=0, C=1.0, solver='lbfgs', max_iter=2000, multi_class='multinomial')
+    clf = LogisticRegression(random_state=0, C=1.0, solver='lbfgs', max_iter=2000)
     clf.fit(train_feats, train_labels)
     lr_preds = clf.predict(test_feats)
     lr_acc = np.mean(lr_preds == test_labels)

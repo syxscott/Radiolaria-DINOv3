@@ -1,0 +1,15 @@
+group,variant,drift_pct
+cls_token,no-Gram,99.64194793066753
+storage_tokens,no-Gram,101.1026011912484
+patch_embed,no-Gram,109.8388444420173
+LayerScale γ,no-Gram,100.00592518473803
+attn.qkv,no-Gram,101.11616091076027
+mlp,no-Gram,101.11114198909375
+norm,no-Gram,71.15028988274427
+cls_token,Gram,99.70629981491714
+storage_tokens,Gram,101.1889526794769
+patch_embed,Gram,109.81929388635557
+LayerScale γ,Gram,99.98686707711909
+attn.qkv,Gram,101.18356481796206
+mlp,Gram,101.27279709269463
+norm,Gram,71.42197643630934

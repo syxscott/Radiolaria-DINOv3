@@ -1,0 +1,24 @@
+experiment_name: one_shot_extreme
+
+data_root: ./data
+results_root: ./results
+model_size: base
+seeds: [42, 123, 456, 789, 999]
+
+img_size: 224
+num_workers: 4
+batch_size: 128
+
+lp_c: 1.0
+lp_max_iter: 2000
+
+checkpoints:
+  small:
+    "0": ./model/dinov3_vits16_pretrain.pth
+    "100": ./历史文件/tapt_vits16_100/eval/training_37499/teacher_checkpoint.pth
+  base:
+    "0": ./model/dinov3_vitb16_pretrain.pth
+    "100": ./历史文件/tapt_vitb16_100/eval/training_37499/teacher_checkpoint.pth
+  large:
+    "0": ./model/dinov3_vitl16_pretrain.pth
+    "100": ./历史文件/tapt_vitl16_100/eval/training_37499/teacher_checkpoint.pth

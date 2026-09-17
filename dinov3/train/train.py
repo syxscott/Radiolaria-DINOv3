@@ -108,28 +108,28 @@ def build_schedulers(cfg):
     lr = dict(
         base_value=cfg.optim["lr"],
         final_value=cfg.optim["min_lr"],
-        total_iters=cfg.optim["epochs"] * OFFICIAL_EPOCH_LENGTH,
-        warmup_iters=cfg.optim["warmup_epochs"] * OFFICIAL_EPOCH_LENGTH,
+        total_iters=int(cfg.optim["epochs"] * OFFICIAL_EPOCH_LENGTH),
+        warmup_iters=int(cfg.optim["warmup_epochs"] * OFFICIAL_EPOCH_LENGTH),
         start_warmup_value=0,
         trunc_extra=cfg.optim["schedule_trunc_extra"],
     )
     wd = dict(
         base_value=cfg.optim["weight_decay"],
         final_value=cfg.optim["weight_decay_end"],
-        total_iters=cfg.optim["epochs"] * OFFICIAL_EPOCH_LENGTH,
+        total_iters=int(cfg.optim["epochs"] * OFFICIAL_EPOCH_LENGTH),
         trunc_extra=cfg.optim["schedule_trunc_extra"],
     )
     momentum = dict(
         base_value=cfg.teacher["momentum_teacher"],
         final_value=cfg.teacher["final_momentum_teacher"],
-        total_iters=cfg.optim["epochs"] * OFFICIAL_EPOCH_LENGTH,
+        total_iters=int(cfg.optim["epochs"] * OFFICIAL_EPOCH_LENGTH),
         trunc_extra=cfg.optim["schedule_trunc_extra"],
     )
     teacher_temp = dict(
         base_value=cfg.teacher["teacher_temp"],
         final_value=cfg.teacher["teacher_temp"],
-        total_iters=cfg.teacher["warmup_teacher_temp_epochs"] * OFFICIAL_EPOCH_LENGTH,
-        warmup_iters=cfg.teacher["warmup_teacher_temp_epochs"] * OFFICIAL_EPOCH_LENGTH,
+        total_iters=int(cfg.teacher["warmup_teacher_temp_epochs"] * OFFICIAL_EPOCH_LENGTH),
+        warmup_iters=int(cfg.teacher["warmup_teacher_temp_epochs"] * OFFICIAL_EPOCH_LENGTH),
         start_warmup_value=cfg.teacher["warmup_teacher_temp"],
     )
 
@@ -139,7 +139,7 @@ def build_schedulers(cfg):
     teacher_temp_schedule = CosineScheduler(**teacher_temp)
     last_layer_lr_schedule = CosineScheduler(**lr)
 
-    last_layer_lr_schedule.schedule[: cfg.optim["freeze_last_layer_epochs"] * OFFICIAL_EPOCH_LENGTH] = (
+    last_layer_lr_schedule.schedule[: int(cfg.optim["freeze_last_layer_epochs"] * OFFICIAL_EPOCH_LENGTH)] = (
         0  # mimicking the original schedules
     )
     logger.info("Schedulers ready.")

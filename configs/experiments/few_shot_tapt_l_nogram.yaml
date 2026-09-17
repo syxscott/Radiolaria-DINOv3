@@ -1,0 +1,36 @@
+# ViT-L/16 无 Gram TAPT 下游评估
+experiment_name: few_shot_tapt_l_nogram
+
+data_root: ./data
+results_root: ./results
+
+fractions: ["100"]
+model_sizes: ["large"]
+k_shots: [1, 3, 5, 10]
+seeds: [42, 123, 456, 789, 999]
+
+img_size: 224
+num_workers: 4
+batch_size: 24
+eval_batch_size: 64
+progress_tqdm: true
+
+epochs_linear: 10
+epochs_full_ft: 20
+lr_linear: 5.0e-4
+lr_full_ft: 2.0e-5
+weight_decay: 0.05
+layer_decay: 0.75
+use_llrd: true
+
+mixup_alpha: 0.8
+cutmix_alpha: 1.0
+mix_prob: 1.0
+randaugment_magnitude: 2
+
+lp_c: 1.0
+lp_max_iter: 2000
+
+checkpoints:
+  large:
+    "100": ./outputs/tapt_vitl16_100_nogram/teacher_checkpoint.pth

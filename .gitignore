@@ -1,0 +1,34 @@
+# ===== 数据与模型权重 (不入库) =====
+data/images/
+data/images_eval_all/
+data/images_all/
+data/ssl_subsets/
+model/*.pth
+outputs/
+features/
+历史文件/
+results/
+results_smoke/
+logs/
+runs/
+local_dino/
+
+# ===== 大文件 =====
+*.pth
+*.docx
+*.pptx
+*.zip
+*.tar.gz
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*.egg-info/
+.ipynb_checkpoints/
+
+# ===== IDE / 系统 =====
+.idea/
+.vscode/
+.DS_Store
+*.tmp
+.zcode/

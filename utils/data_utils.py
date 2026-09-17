@@ -58,7 +58,7 @@ def get_stratified_datasets(data_root, img_root, transform_train=None, transform
         time.sleep(1)
         wait_attempts += 1
 
-    if os.path.exists(fixed_train_path) and os.path.exists(fixed_test_path):
+    if os.path.exists(fixed_train_path) and os.path.exists(fixed_val_path) and os.path.exists(fixed_test_path):
         print(f"[DataUtils] 发现已固化的数据划分: {save_dir}，直接加载...")
         train_df = pd.read_csv(fixed_train_path)
         val_df = pd.read_csv(fixed_val_path)
@@ -152,21 +152,47 @@ def get_stratified_datasets(data_root, img_root, transform_train=None, transform
             samples.append((p, class_to_idx[row['label']]))
         return samples
 
-    train_ds = RadiolariaDataset(df_to_samples(train_df), transform=transform_train, name="Train")
-    val_ds = RadiolariaDataset(df_to_samples(val_df), transform=transform_val, name="Val")
-    test_ds = RadiolariaDataset(df_to_samples(test_df), transform=transform_val, name="Test")
+    train_ds = RadiolariaDataset(df_to_samples(train_df), img_root=img_root, transform=transform_train, name="Train")
+    val_ds = RadiolariaDataset(df_to_samples(val_df), img_root=img_root, transform=transform_val, name="Val")
+    test_ds = RadiolariaDataset(df_to_samples(test_df), img_root=img_root, transform=transform_val, name="Test")
 
     return train_ds, val_ds, test_ds, class_to_idx
 
 
 class RadiolariaDataset(Dataset):
-    def __init__(self, samples, transform=None, name="Dataset"):
+    def __init__(self, samples, img_root=None, transform=None, name="Dataset"):
         self.samples = samples
+        self.img_root = os.path.abspath(img_root) if img_root else None
         self.transform = transform
         self.name = name
         self.error_count = 0
         self.max_errors = 100  # 熔断阈值
         self._check_integrity()
+
+    def _resolve_path(self, original_path):
+        """解析CSV中的路径，兼容绝对路径、相对路径、仅文件名三种形式。"""
+        p = str(original_path)
+        if os.path.isabs(p) and os.path.exists(p):
+            return p
+
+        candidates = []
+        if self.img_root:
+            candidates.append(os.path.join(self.img_root, p))
+
+        filename = os.path.basename(p)
+        if self.img_root:
+            candidates.extend([
+                os.path.join(self.img_root, 'train', '0', filename),
+                os.path.join(self.img_root, filename),
+                os.path.join(os.path.dirname(self.img_root), filename),
+            ])
+
+        for cp in candidates:
+            if os.path.exists(cp):
+                return cp
+
+        # 最终回退，保留原路径，便于错误日志定位
+        return p
 
     def _check_integrity(self):
         """随机检查前几张图，确保路径基本正确"""
@@ -174,7 +200,8 @@ class RadiolariaDataset(Dataset):
         indices = np.random.choice(len(self.samples), min(5, len(self.samples)), replace=False)
         for idx in indices:
             path, _ = self.samples[idx]
-            if not os.path.exists(path):
+            resolved = self._resolve_path(path)
+            if not os.path.exists(resolved):
                 print(f"⚠️ [警告] {self.name} 数据集完整性检查失败: 找不到文件 {path}")
 
     def __len__(self):
@@ -182,49 +209,32 @@ class RadiolariaDataset(Dataset):
 
     def __getitem__(self, idx):
         path, label = self.samples[idx]
-        # 如果路径不存在，尝试在 img_root 下查找
-        if not os.path.exists(path):
-            # 尝试构建相对于 img_root 的路径
-            filename = os.path.basename(path)
-            # 检查是否在 train/0 目录下
-            alt_path = os.path.join(self.img_root, 'train', '0', filename)
-            if os.path.exists(alt_path):
-                path = alt_path
-            else:
-                # 如果还是找不到，尝试在原始路径的父目录中查找
-                parent_dir = os.path.dirname(self.img_root)
-                alt_path2 = os.path.join(parent_dir, filename)
-                if os.path.exists(alt_path2):
-                    path = alt_path2
-                else:
-                    # 最后尝试直接在 img_root 中查找
-                    alt_path3 = os.path.join(self.img_root, filename)
-                    if os.path.exists(alt_path3):
-                        path = alt_path3
-                    else:
-                        # 如果所有尝试都失败，记录错误
-                        print(f"❌ [错误] {self.name} 找不到图片: {path} 或替代路径 {alt_path}, {alt_path2}, {alt_path3}")
-                        self.error_count += 1
-                        if self.error_count == self.max_errors:
-                            raise RuntimeError(
-                                f"{self.name} 数据集加载失败次数过多 (> {self.max_errors})，请检查数据路径或文件损坏情况！")
-                        
-                        # 返回一张全黑图作为 fallback
-                        img = Image.new('RGB', (224, 224), (0, 0, 0))
-                        if self.transform:
-                            img = self.transform(img)
-                        return img, label, path
+        resolved_path = self._resolve_path(path)
 
-        try:
-            with open(path, 'rb') as f:
-                img = Image.open(f).convert('RGB')
+        if not os.path.exists(resolved_path):
+            # 如果所有尝试都失败，记录错误
+            print(f"❌ [错误] {self.name} 找不到图片: {path}")
+            self.error_count += 1
+            if self.error_count == self.max_errors:
+                raise RuntimeError(
+                    f"{self.name} 数据集加载失败次数过多 (> {self.max_errors})，请检查数据路径或文件损坏情况！")
+
+            # 返回一张全黑图作为 fallback
+            img = Image.new('RGB', (224, 224), (0, 0, 0))
             if self.transform:
                 img = self.transform(img)
             return img, label, path
+
+        try:
+            with open(resolved_path, 'rb') as f:
+                img = Image.open(f).convert('RGB')
+            if self.transform:
+                img = self.transform(img)
+            return img, label, resolved_path
         except Exception as e:
             self.error_count += 1
             if self.error_count < 5:
-                print(f"❌ [错误] {self.name} 无法加载图片 ({self.error_count}次): {path}, {e}")
+                print(f"❌ [错误] {self.name} 无法加载图片 ({self.error_count}次): {resolved_path}, {e}")
             elif self.error_count == self.max_errors:
                 raise RuntimeError(
                     f"{self.name} 数据集加载失败次数过多 (> {self.max_errors})，请检查数据路径或文件损坏情况！")
@@ -233,7 +243,7 @@ class RadiolariaDataset(Dataset):
             img = Image.new('RGB', (224, 224), (0, 0, 0))
             if self.transform:
                 img = self.transform(img)
-            return img, label, path
+            return img, label, resolved_path
 
 
 def get_transforms(img_size=224, is_train=True):

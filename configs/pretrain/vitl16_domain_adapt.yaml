@@ -10,7 +10,13 @@ train:
   OFFICIAL_EPOCH_LENGTH: 2500 # Batch减半，这就翻倍，保持总 Iterations 不变
 
 student:
-  arch: "vitl16"
+  # dinov3 模型注册表名为 vit_large（vitl16 会直接 KeyError）
+  # epochs:16 × OFFICIAL_EPOCH_LENGTH:2500 = 40000 步，与 small/base 的 32×1250 总步数一致
+  arch: "vit_large"
+  # 与官方 checkpoint 架构对齐
+  norm_layer: "layernormbf16"
+  n_storage_tokens: 4
+  mask_k_bias: true
   patch_size: 16
   drop_path_rate: 0.3 # Large 模型需要更强的正则化
   layerscale: 1.0e-5

@@ -1,0 +1,41 @@
+experiment_name: ablation_robustness
+
+data_root: ./data
+results_root: ./results
+
+fractions: ["0", "100"]
+model_sizes: ["small", "base"]
+k_shot: 5
+seeds: [42, 123, 456, 789, 999]
+
+img_size: 224
+num_workers: 4
+batch_size: 64
+eval_batch_size: 128
+
+epochs_linear: 8
+epochs_full_ft: 12
+lr_linear: 5.0e-4
+lr_full_ft: 2.0e-5
+weight_decay: 0.05
+layer_decay: 0.75
+
+mixup_alpha: 0.8
+cutmix_alpha: 1.0
+mix_prob: 1.0
+
+# Robustness perturbation
+noise_std: 0.08
+fragment_prob: 0.3
+
+# Optional cross-domain metadata csv (filepath, domain)
+# domain values expected to include 'south' or 'japan'
+domain_split_csv: ./data/domain_split.csv
+
+checkpoints:
+  small:
+    "0": ./model/dinov3_vits16_pretrain.pth
+    "100": ./outputs/tapt_vits16_100/teacher_checkpoint.pth
+  base:
+    "0": ./model/dinov3_vitb16_pretrain.pth
+    "100": ./outputs/tapt_vitb16_100/teacher_checkpoint.pth

@@ -4,11 +4,13 @@
 # the terms of the DINOv3 License Agreement.
 
 import logging
+import os
 from enum import Enum
 from typing import Any, Callable, List, Optional, TypeVar
 
 import torch
 from torch.utils.data import Sampler
+from torchvision.datasets import ImageFolder
 
 from .datasets import ADE20K, CocoCaptions, ImageNet, ImageNet22k, NYU
 from .samplers import EpochSampler, InfiniteSampler, ShardedInfiniteSampler
@@ -98,6 +100,24 @@ def make_dataset(
         The created dataset.
     """
     logger.info(f'using dataset: "{dataset_str}"')
+
+    # === [PATCH] 优先尝试本地路径 ===
+    # 如果 dataset_str 看起来像本地目录（不含 ":" 冒号分隔符），直接用 ImageFolder 加载
+    if ":" not in dataset_str and os.path.exists(dataset_str) and os.path.isdir(dataset_str):
+        print(f"[PATCH] Loading as ImageFolder: {dataset_str}", flush=True)
+        try:
+            dataset = ImageFolder(root=dataset_str, transform=transform, target_transform=target_transform)
+            logger.info(f"# of dataset samples: {len(dataset):,d}")
+            if not hasattr(dataset, "transform"):
+                dataset.transform = transform
+            if not hasattr(dataset, "target_transform"):
+                dataset.target_transform = target_transform
+            if not hasattr(dataset, "transforms"):
+                dataset.transforms = transforms
+            return dataset
+        except Exception as e:
+            print(f"[PATCH] ImageFolder loading failed: {e}", flush=True)
+            # 继续回退到原始逻辑
 
     class_, kwargs = _parse_dataset_str(dataset_str)
     dataset = class_(transform=transform, target_transform=target_transform, transforms=transforms, **kwargs)

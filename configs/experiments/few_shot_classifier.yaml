@@ -1,0 +1,52 @@
+# Few-shot core experiment config
+experiment_name: few_shot_classifier
+
+# Supports:
+# - data/radiolaria_281_classes/
+# - data/images_supervised/{train,val,test}/
+data_root: ./data
+results_root: ./results
+
+# 论文实验矩阵：Baseline(0%) 与 TAPT(100%，含 Gram anchoring) 两种初始化
+fractions: ["0", "100"]
+# ViT-S/16, ViT-S+/16, ViT-B/16（ViT-L/16 暂缓）
+model_sizes: ["small", "smallplus", "base"]
+k_shots: [1, 3, 5, 10]
+seeds: [42, 123, 456, 789, 999]
+
+img_size: 224
+num_workers: 4
+batch_size: 64
+eval_batch_size: 128
+progress_tqdm: true
+
+# Progressive SFT
+epochs_linear: 10
+epochs_full_ft: 20
+lr_linear: 5.0e-4
+lr_full_ft: 2.0e-5
+weight_decay: 0.05
+layer_decay: 0.75
+use_llrd: true
+
+# Mixup + CutMix
+mixup_alpha: 0.8
+cutmix_alpha: 1.0
+mix_prob: 1.0
+randaugment_magnitude: 2
+
+# Frozen feature LP
+lp_c: 1.0
+lp_max_iter: 2000
+
+# IMPORTANT: "100" 指向本次开 Gram 重训产出的 teacher 权重（训练完成后自动出现）
+checkpoints:
+  small:
+    "0": ./model/dinov3_vits16_pretrain.pth
+    "100": ./outputs/tapt_vits16_100/teacher_checkpoint.pth
+  smallplus:
+    "0": ./model/dinov3_vits16plus_pretrain.pth
+    "100": ./outputs/tapt_vits16plus_100/teacher_checkpoint.pth
+  base:
+    "0": ./model/dinov3_vitb16_pretrain.pth
+    "100": ./outputs/tapt_vitb16_100/teacher_checkpoint.pth

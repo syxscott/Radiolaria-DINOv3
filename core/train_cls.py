@@ -36,13 +36,21 @@ def setup_distributed():
         rank = int(os.environ["RANK"])
         world_size = int(os.environ["WORLD_SIZE"])
         gpu = int(os.environ["LOCAL_RANK"])
-        torch.cuda.set_device(gpu)
-        dist.init_process_group(backend="nccl", init_method="env://", world_size=world_size, rank=rank)
+        if torch.cuda.is_available():
+            torch.cuda.set_device(gpu)
+            backend = "nccl"
+        else:
+            backend = "gloo"
+        dist.init_process_group(backend=backend, init_method="env://", world_size=world_size, rank=rank)
         dist.barrier()
-        return gpu, rank, world_size
+        return gpu, rank, world_size, True
     else:
         print("[Warning] Running in non-distributed mode.")
-        return 0, 0, 1
+        return 0, 0, 1, False
+
+
+def unwrap_model(model):
+    return model.module if hasattr(model, 'module') else model
 
 
 def is_main_process():
@@ -262,8 +270,9 @@ def build_optimizer_llrd(model, base_lr, weight_decay, layer_decay=0.75):
 
 def train_epoch(model, loader, optimizer, criterion, device, epoch, scaler):
     model.train()
-    if hasattr(model.module, 'backbone') and not next(model.module.backbone.parameters()).requires_grad:
-        model.module.backbone.eval()
+    real_model = unwrap_model(model)
+    if hasattr(real_model, 'backbone') and not next(real_model.backbone.parameters()).requires_grad:
+        real_model.backbone.eval()
 
     total_loss = torch.tensor(0.0).to(device)
     if dist.is_initialized(): loader.sampler.set_epoch(epoch)
@@ -271,7 +280,7 @@ def train_epoch(model, loader, optimizer, criterion, device, epoch, scaler):
     for imgs, targets, _ in loader:
         imgs, targets = imgs.to(device), targets.to(device)
         optimizer.zero_grad()
-        with torch.cuda.amp.autocast(enabled=True):
+        with torch.cuda.amp.autocast(enabled=torch.cuda.is_available()):
             outputs = model(imgs)
             loss = criterion(outputs, targets)
 
@@ -294,7 +303,7 @@ def evaluate(model, loader, device):
 
     for imgs, labels, _ in loader:
         imgs, labels = imgs.to(device), labels.to(device)
-        with torch.cuda.amp.autocast(enabled=True):
+        with torch.cuda.amp.autocast(enabled=torch.cuda.is_available()):
             outputs = model(imgs)
         _, preds = outputs.max(1)
         all_preds.append(preds)
@@ -339,8 +348,11 @@ def main():
                         choices=['vitb16', 'vitl16', 'vitg14', 'vits16', 'vits16plus'])
     args = parser.parse_args()
 
-    gpu, rank, world_size = setup_distributed()
-    device = torch.device(f"cuda:{gpu}")
+    gpu, rank, world_size, is_distributed = setup_distributed()
+    if torch.cuda.is_available():
+        device = torch.device(f"cuda:{gpu}" if is_distributed else "cuda")
+    else:
+        device = torch.device("cpu")
 
     if is_main_process():
         os.makedirs(args.output_dir, exist_ok=True)
@@ -359,12 +371,38 @@ def main():
     mixup_fn = MixupCutmixCollator(mixup_alpha=0.8, cutmix_alpha=1.0, prob=1.0, num_classes=len(class_to_idx))
     criterion = SoftTargetCrossEntropy()
 
-    train_loader = DataLoader(train_ds, batch_size=args.batch_size, sampler=DistributedSampler(train_ds),
-                              num_workers=4, pin_memory=True, collate_fn=mixup_fn)
-    val_loader = DataLoader(val_ds, batch_size=args.batch_size, sampler=DistributedSampler(val_ds, shuffle=False),
-                            num_workers=4)
-    test_loader = DataLoader(test_ds, batch_size=args.batch_size, sampler=DistributedSampler(test_ds, shuffle=False),
-                             num_workers=4)
+    train_sampler = DistributedSampler(train_ds) if is_distributed else None
+    val_sampler = DistributedSampler(val_ds, shuffle=False) if is_distributed else None
+    test_sampler = DistributedSampler(test_ds, shuffle=False) if is_distributed else None
+
+    train_loader = DataLoader(
+        train_ds,
+        batch_size=args.batch_size,
+        sampler=train_sampler,
+        shuffle=(train_sampler is None),
+        num_workers=4,
+        persistent_workers=True,
+        pin_memory=torch.cuda.is_available(),
+        collate_fn=mixup_fn,
+    )
+    val_loader = DataLoader(
+        val_ds,
+        batch_size=args.batch_size,
+        sampler=val_sampler,
+        shuffle=False,
+        num_workers=4,
+        persistent_workers=True,
+        pin_memory=torch.cuda.is_available(),
+    )
+    test_loader = DataLoader(
+        test_ds,
+        batch_size=args.batch_size,
+        sampler=test_sampler,
+        shuffle=False,
+        num_workers=4,
+        persistent_workers=True,
+        pin_memory=torch.cuda.is_available(),
+    )
 
     # [Updated] 初始化模型逻辑
     print(f"Initializing {args.model_size}...")
@@ -382,14 +420,15 @@ def main():
     backbone = load_weights_robust(backbone, args.weights)
 
     model = SupervisedClassifier(backbone, len(class_to_idx)).to(device)
-    model = DDP(model, device_ids=[gpu], find_unused_parameters=True)
-    scaler = torch.cuda.amp.GradScaler()
+    if is_distributed:
+        model = DDP(model, device_ids=[gpu] if torch.cuda.is_available() else None, find_unused_parameters=True)
+    scaler = torch.cuda.amp.GradScaler(enabled=torch.cuda.is_available())
 
     current_mode = 'linear' if args.mode == 'two_stage' else args.mode
-    model.module.set_train_mode(current_mode)
+    unwrap_model(model).set_train_mode(current_mode)
 
     if current_mode == 'linear':
-        optimizer = optim.AdamW(model.module.head.parameters(), lr=args.lr)
+        optimizer = optim.AdamW(unwrap_model(model).head.parameters(), lr=args.lr)
     else:
         optimizer = build_optimizer_llrd(model, args.lr, 0.05, args.layer_decay)
 
@@ -403,7 +442,7 @@ def main():
             if is_main_process():
                 print("\n>>> [Phase Switch] Switching from Linear to Full Finetuning with LLRD <<<")
             current_mode = 'full_ft'
-            model.module.set_train_mode('full_ft')
+            unwrap_model(model).set_train_mode('full_ft')
 
             new_lr = args.lr * 0.5
             optimizer = build_optimizer_llrd(model, new_lr, 0.05, args.layer_decay)
@@ -422,13 +461,14 @@ def main():
                     f"\nEp {epoch} | Loss: {loss:.4f} | Val Acc: {val_acc:.2f} F1: {val_f1:.4f} Recall: {val_rec:.4f}")
                 if val_f1 > best_val_f1:
                     best_val_f1 = val_f1
-                    torch.save(model.module.state_dict(), os.path.join(args.output_dir, 'best_model.pth'))
+                    torch.save(unwrap_model(model).state_dict(), os.path.join(args.output_dir, 'best_model.pth'))
                     print("--> Best Model Saved.")
 
-    dist.barrier()
+    if dist.is_initialized():
+        dist.barrier()
     if is_main_process():
         print("\nLoading best model for testing...")
-        model.module.load_state_dict(torch.load(os.path.join(args.output_dir, 'best_model.pth')))
+        unwrap_model(model).load_state_dict(torch.load(os.path.join(args.output_dir, 'best_model.pth'), map_location=device))
 
     test_acc, test_f1, test_rec = evaluate(model, test_loader, device)
     if is_main_process():
